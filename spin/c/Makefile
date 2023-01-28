@@ -1,5 +1,6 @@
 CC=gcc
 CFLAGS=-I.
+LIBS=-lpthread
 DEPS=%.h
 SRC=spin.c
 TARGET=spin
@@ -7,10 +8,10 @@ TARGET=spin
 all: $(TARGET) run
 
 %.o: %.c $(DEPS)
-	$(CC) -c -o $@ $< $(CFLAGS)
+	$(CC) -c -o $@ $< $(CFLAGS) $(LIBS)
 
 $(TARGET): $(TARGET).o
-	$(CC) -o $(TARGET) $(TARGET).o
+	$(CC) $(CFLAGS) -o $(TARGET) $(TARGET).o $(LIBS)
 
 run:
 	./bench.sh

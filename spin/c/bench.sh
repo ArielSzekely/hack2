@@ -20,16 +20,16 @@ time -p ./$prog --nthread $nthread --niter $niter
 sleep 2
 
 echo "===== baseline hipri taskset $hipri_cpu_list ====="
-time -p taskset --cpu-list $hipri_cpu_list ./$prog --nthread $nthread --niter $niter
+time -p taskset -a --cpu-list $hipri_cpu_list ./$prog --nthread $nthread --niter $niter
 
 sleep 2
 
 echo "===== lowpri few threads, hipri taskset $hipri_cpu_list lowpri taskset $lowpri_cpu_list ====="
-time -p taskset --cpu-list $hipri_cpu_list ./$prog --nthread $nthread --niter $niter &
-time -p taskset --cpu-list $lowpri_cpu_list ./$prog --nthread 1 --niter $niter &
+time -p taskset -a --cpu-list $hipri_cpu_list ./$prog --nthread $nthread --niter $niter &
+time -p taskset -a --cpu-list $lowpri_cpu_list ./$prog --nthread 1 --niter $niter &
 wait
 
 echo "===== both many threads, hipri taskset $hipri_cpu_list lowpri taskset $lowpri_cpu_list ====="
-time -p taskset --cpu-list $hipri_cpu_list ./$prog --nthread $nthread --niter $niter &
-time -p taskset --cpu-list $lowpri_cpu_list ./$prog --nthread $nthread --niter $niter &
+time -p taskset -a --cpu-list $hipri_cpu_list ./$prog --nthread $nthread --niter $niter &
+time -p taskset -a --cpu-list $hiwpri_cpu_list ./$prog --nthread $nthread --niter $niter &
 wait

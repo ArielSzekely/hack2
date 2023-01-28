@@ -32,7 +32,7 @@ void parse_opts(const int argc, char * const*argv, int *nthread, int *niter) {
 		switch (c) {
 		case 0:
 			if (opt_idx != 0) {
-				printf("Unexpected flag\n", optarg);
+				printf("Unexpected flag %s\n", optarg);
 				exit(1);
 			}
 			break;
