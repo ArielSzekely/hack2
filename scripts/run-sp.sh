@@ -21,4 +21,5 @@ SPIN_PID=$(pgrep spin)
 echo "Adding $SPIN_PID to cgroup"
 echo $SPIN_PID | sudo tee $CGROUP/cgroup.procs
 echo "Added to cgroup"
-sudo chrt -a -i -p $SPIN_PID
+sudo chrt -a -i -p 0 $SPIN_PID
+echo "Changed scheduling policy"
