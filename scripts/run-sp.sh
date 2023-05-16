@@ -14,7 +14,7 @@ fi
 echo "Killing old spinners"
 pkill spin
 echo "Starting spinner"
-$DIR/../spin/c/spin -t $(nproc) $N_ITER &
+$DIR/../spin/c/spin -t $(nproc) -i $N_ITER &
 sleep 2s
 SPIN_PID=$(pgrep spin)
 echo "Adding $SPIN_PID to cgroup"
