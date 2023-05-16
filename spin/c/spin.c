@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <getopt.h>
 #include <pthread.h>
+#include <stdint.h>
 
 static int verbose = 0;
 
@@ -10,7 +11,7 @@ void usage(char * const*argv) {
 	exit(1);
 }
 
-void parse_opts(const int argc, char * const*argv, int *nthread, int *niter) {
+void parse_opts(const int argc, char * const*argv, uint64_t *nthread, uint64_t *niter) {
 	int c       = 0;
 	int opt_idx = 0;
 
@@ -37,10 +38,10 @@ void parse_opts(const int argc, char * const*argv, int *nthread, int *niter) {
 			}
 			break;
 		case 't':
-			*nthread = atoi(optarg);
+			*nthread = atoll(optarg);
 			break;
 		case 'i':
-			*niter = atoi(optarg);
+			*niter = atoll(optarg);
 			break;
 		case '?':
 			/* getopt_long already printed error msg */
@@ -58,16 +59,16 @@ void parse_opts(const int argc, char * const*argv, int *nthread, int *niter) {
 }
 
 void *spin(void *ptr) {
-	int niter = *((int *) ptr);
-	int i = 		0;
-	int j = 		0;
+	uint64_t niter = *((uint64_t *) ptr);
+	uint64_t i = 		0;
+	uint64_t j = 		0;
 	for (i = 0; i < niter; i++) {
 		j = j * i + i;
 	}
 	return NULL;
 }
 
-pthread_t *make_pthreads(const int nthread) {
+pthread_t *make_pthreads(const uint64_t nthread) {
 	pthread_t *ts;
 	ts = malloc(sizeof(pthread_t) * nthread);
 	return ts;
@@ -77,11 +78,11 @@ void free_pthreads(pthread_t *ts) {
 	free(ts);
 }
 
-void create_threads(const int nthread, int niter, pthread_t *ts) {
+void create_threads(const uint64_t nthread, uint64_t *niter, pthread_t *ts) {
 	int ret = 0;
-	int i   = 0;
+	uint64_t i   = 0;
 	for (i = 0; i < nthread; i++) {
-		ret = pthread_create(&ts[i], NULL, spin, &niter);
+		ret = pthread_create(&ts[i], NULL, spin, niter);
 		if (ret != 0) {
 			printf("Error pthread create: %d\n", ret);
 			exit(1);
@@ -89,9 +90,9 @@ void create_threads(const int nthread, int niter, pthread_t *ts) {
 	}
 }
 
-void join_threads(const int nthread, const pthread_t *ts) {
+void join_threads(const uint64_t nthread, const pthread_t *ts) {
 	int ret = 0;
-	int i   = 0;
+	uint64_t i   = 0;
 	for (i = 0; i < nthread; i++) {
 		ret = pthread_join(ts[i], NULL);
 		if (ret != 0) {
@@ -103,8 +104,8 @@ void join_threads(const int nthread, const pthread_t *ts) {
 
 int main(int argc, char **argv) {
 	// Args
-	int nthread = 0;
-	int niter   = 0;
+	uint64_t nthread = 0;
+	uint64_t niter   = 0;
 
 	// Threads
 	pthread_t *ts;
@@ -116,7 +117,7 @@ int main(int argc, char **argv) {
 	printf("nthread %d niter %d\n", nthread, niter);
 	
 	ts = make_pthreads(nthread);
-	create_threads(nthread, niter, ts);
+	create_threads(nthread, &niter, ts);
 	join_threads(nthread, ts);
 	free_pthreads(ts);
 	

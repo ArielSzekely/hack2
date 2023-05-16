@@ -1,11 +1,11 @@
 CC=gcc
-CFLAGS=-I.
-LIBS=-lpthread
+CFLAGS=-I. -g
+LIBS=-lpthread -lfcgi
 DEPS=%.h
-SRC=spin.c
-TARGET=spin
+SRC=srv.c
+TARGET=srv
 
-all: $(TARGET)
+all: $(TARGET) run
 
 %.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS) $(LIBS)
@@ -14,7 +14,7 @@ $(TARGET): $(TARGET).o
 	$(CC) $(CFLAGS) -o $(TARGET) $(TARGET).o $(LIBS)
 
 run:
-	./bench.sh
+	echo "abc"
 
 clean:
 	rm -f *.o
