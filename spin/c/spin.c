@@ -114,7 +114,7 @@ int main(int argc, char **argv) {
 	int ret = 0;
 
 	parse_opts(argc, argv, &nthread, &niter);
-	printf("nthread %d niter %d\n", nthread, niter);
+	printf("nthread %llu niter %llu\n", nthread, niter);
 	
 	ts = make_pthreads(nthread);
 	create_threads(nthread, &niter, ts);
