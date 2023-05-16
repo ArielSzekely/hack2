@@ -16,6 +16,6 @@ pkill spin
 echo "Starting spinner"
 $DIR/../spin/c/spin -t $(nproc) $N_ITER &
 SPIN_PID=$(pgrep spin)
-echo "Adding to cgroup"
+echo "Adding $SPIN_PID to cgroup"
 echo $SPIN_PID | sudo tee $CGROUP/cgroup.procs
 echo "Added to cgroup"
