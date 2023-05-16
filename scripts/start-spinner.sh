@@ -7,7 +7,7 @@ CGROUP=/sys/fs/cgroup/cpu,cpuacct/system.slice/spin
 
 if ! [ -d $CGROUP ]; then
   echo "Make cgroup"
-  mkdir $CGROUP
+  sudo mkdir $CGROUP
   echo 100 | sudo tee $CGROUP/cpu.shares
 fi
 
