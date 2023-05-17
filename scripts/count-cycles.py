@@ -4,7 +4,7 @@ import argparse
 
 def count_cgroup_cycles(cgroup):
  with open("/sys/fs/cgroup/cpu,cpuacct/system.slice/{}/cpuacct.usage".format(cgroup), "r") as f: 
-   ns = int(strip(str(f.read())))
+   ns = int(str(f.read()).strip())
  print(ns)
 
 def main():
