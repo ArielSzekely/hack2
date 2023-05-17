@@ -2,7 +2,7 @@
 
 DIR=$(dirname $0)
 
-N_ITER=40000000000
+N_ITER=80000000000
 CGROUP=/sys/fs/cgroup/cpu,cpuacct/system.slice/spin
 
 if ! [ -d $CGROUP ]; then
