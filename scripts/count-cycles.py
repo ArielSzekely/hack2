@@ -20,7 +20,7 @@ def main():
   cnt = get_ns(cgroup_path(args.cgroup))
   if args.prev is not None:
     prev = get_ns(args.prev)
-    print("Nanoseconds difference: {}".format(cnt - prev))
+    print("Milliseconds difference: {}".format((float(cnt) - float(prev)) / 1000000.0))
   else:
     print("{}".format(cnt))
 
