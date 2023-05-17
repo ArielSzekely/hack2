@@ -22,7 +22,7 @@ def main():
     prev = get_ns(args.prev)
     print("Nanoseconds difference: {}".format(cnt - prev))
   else:
-    print("Nanoseconds: {}".format(cnt))
+    print("{}".format(cnt))
 
 if __name__ == "__main__":
   main()
