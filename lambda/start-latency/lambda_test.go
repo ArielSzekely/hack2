@@ -52,6 +52,7 @@ func TestLambdaLatency(t *testing.T) {
 	if *result.StatusCode != 200 {
 		log.Fatalf("Bad return status %v, msg %v", result.StatusCode, result.Payload)
 	}
+	log.Printf("Response: %s", result.Payload)
 	var res api.Result
 	err = json.Unmarshal(result.Payload, &res)
 	if err != nil {
