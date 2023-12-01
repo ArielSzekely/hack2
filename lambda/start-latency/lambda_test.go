@@ -25,6 +25,7 @@ func TestLambdaLatency(t *testing.T) {
 	log.Printf("Success!")
 
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
+		Profile:           "sigmaos",
 		SharedConfigState: session.SharedConfigEnable,
 	}))
 
@@ -34,8 +35,8 @@ func TestLambdaLatency(t *testing.T) {
 	}
 
 	client := lambda.New(sess, &aws.Config{
-		Region:   aws.String("us-east-1"),
-		Endpoint: aws.String("127.0.0.1:9000"),
+		Region: aws.String("us-east-1"),
+		//		Endpoint: aws.String("127.0.0.1:9000"),
 	})
 
 	payload, err := json.Marshal(ev)
