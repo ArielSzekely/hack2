@@ -1,20 +1,4 @@
-# Simple memory hog application
-
-The app can be run locally, or on Kubernetes.
-
-## Local
-
-### Build
-
-```
-./make.sh
-```
-
-### Run
-
-```
-./run.sh
-```
+# Simple queueing, compute-bound web server application
 
 ## Kubernetes
 
@@ -23,10 +7,41 @@ The app can be run locally, or on Kubernetes.
 Build the docker container with:
 
 ```
-./docker/build.sh
+$ ./docker/build.sh
 ```
 
-### Run
+### Start K8s
+
+If running on Minikube, start with:
 ```
-./kubernetes/run.sh
+$ ./start-minikube.sh
+```
+
+### Run the App
+
+Stop previous instances of the app with:
+```
+$ kubectl delete -Rf kubernetes
+```
+
+Start the app with:
+```
+$ kubectl apply -Rf kubernetes
+```
+
+Wait for a bit for the app pods to start (10s is usually more than enough), and
+the load balancer pods to find them.
+
+If using minikube, get the IP address for the load-balancer (frontend) service
+using:
+```
+$ minikube service spinhttp-lb --url 
+```
+
+### Generate Load
+
+Using the `<IP_ADDR>` returned above, run the load-generator experiment with:
+```
+$ go clean -testcache
+$ go test -timeout 0 -v elasticity/loadgen --dur 1s --exp_dur 180s --rps 23 --addr <IP_ADDR>
 ```
