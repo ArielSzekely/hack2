@@ -15,5 +15,3 @@ COPY . .
 
 # Build app
 RUN ./make.sh
-
-ENTRYPOINT ["/app/run.sh"]

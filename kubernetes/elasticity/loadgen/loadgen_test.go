@@ -131,6 +131,11 @@ func (s *Stats) print(t *testing.T) {
 		}
 	}
 	log.Printf(str)
+	str2 := "\n=== Per-tick latency stats:"
+	for i := range avgLatPerTick {
+		str2 += fmt.Sprintf("\n\t%d mean:%.2f p50:%.2f p90:%.2f p99:%.2f", i, avgLatPerTick[i], p50LatPerTick[i], p90LatPerTick[i], p99LatPerTick[i])
+	}
+	log.Printf(str2)
 	log.Printf("Latency stats over time: &{ window:%v\n\tavg:%v\n\tp50:%v\n\tp90:%v\n\tp99:%v\n}", STATS_WINDOW_SIZE, avgLatPerTick, p50LatPerTick, p90LatPerTick, p99LatPerTick)
 }
 
@@ -138,7 +143,11 @@ func (s *Stats) getDebugCtxStr() string {
 	return fmt.Sprintf("[t=%v,svc=%v]", timeToTicks(time.Now())-s.start, "wfe")
 }
 
-func doRequest(t *testing.T, wg *sync.WaitGroup, stats *Stats, clnt *http.Client, baseurl string, id int64) {
+func doRequest(t *testing.T, wg *sync.WaitGroup, stats *Stats, clntXXX *http.Client, baseurl string, id int64) {
+	clnt := &http.Client{
+		Timeout:   20 * time.Minute,
+		Transport: http.DefaultTransport,
+	}
 	defer wg.Done()
 	log.Printf("Req id:%v", id)
 	start := time.Now()
@@ -237,6 +246,7 @@ func (s *Stats) monitorK8sClusterStatus(t *testing.T, k8sclnt *kubernetes.Client
 }
 
 func TestLoadgen(t *testing.T) {
+	log.Printf("Loadgen exp_dur:%v spin_dur:%v rps:%v addr:%v", EXP_DUR, DUR, RPS, ADDR)
 	baseurl := "http://" + ADDR + "/spin?dur=" + DUR.String()
 	clnt := &http.Client{
 		Timeout:   20 * time.Minute,
