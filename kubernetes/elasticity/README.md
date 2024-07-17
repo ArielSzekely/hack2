@@ -26,7 +26,17 @@ $ kubectl delete -Rf kubernetes
 
 Start the app with:
 ```
-$ kubectl apply -Rf kubernetes
+$ kubectl apply -Rf kubernetes/app
+```
+
+Start the load balancer of your choice with:
+```
+$ kubectl apply -f kubernetes/lb/<DESIRED_LOAD_BALANCER>
+```
+
+Start the autoscaler with:
+```
+$ kubectl apply -f kubernetes/autoscale/<DESIRED_AUTOSCALER>
 ```
 
 Wait for a bit for the app pods to start (10s is usually more than enough), and

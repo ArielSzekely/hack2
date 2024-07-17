@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: spinhttp-lb
+spec:
+  type: NodePort
+  ports:
+    - name: "8080"
+      port: 8080
+      targetPort: 8080
+  selector:
+    service: spinhttp-lb
+status:
+  loadBalancer: {}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    service: spinhttp-lb
+  name: spinhttp-lb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      service: spinhttp-lb
+  strategy: {}
+  template:
+    metadata:
+      labels:
+        service: spinhttp-lb
+    spec:
+      containers:
+        - name: spinhttpsrv-lb
+          image: arielszekely/spinhttpsrv:latest
+          command:
+          - /app/bin/lb
+          args:
+          - "clntsideqlen"
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              cpu: 1000m
+            limits:
+              cpu: 1000m
+      restartPolicy: Always
+status: {}

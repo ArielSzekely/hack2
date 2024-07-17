@@ -23,8 +23,9 @@ const (
 type Tlb string
 
 const (
-	LB_RR     Tlb = "rr"
-	LB_Random     = "random"
+	LB_RR           Tlb = "rr"
+	LB_ClntSideQLen     = "clntsideqlen"
+	LB_Random           = "random"
 )
 
 func parseLBType(s string) Tlb {
@@ -40,11 +41,12 @@ func parseLBType(s string) Tlb {
 }
 
 type LB struct {
-	mu     sync.Mutex
-	clnt   *http.Client
-	t      Tlb
-	podIPs []string
-	idx    int
+	mu              sync.Mutex
+	clnt            *http.Client
+	t               Tlb
+	podIPs          []string
+	outstandingReqs map[string]int
+	idx             int
 }
 
 func newLB(lbType Tlb, k8sclnt *kubernetes.Clientset) *LB {
@@ -55,8 +57,9 @@ func newLB(lbType Tlb, k8sclnt *kubernetes.Clientset) *LB {
 	clnt.Transport.(*http.Transport).MaxIdleConnsPerHost = 100000
 	clnt.Transport.(*http.Transport).MaxIdleConns = 100000
 	lb := &LB{
-		t:    lbType,
-		clnt: clnt,
+		t:               lbType,
+		clnt:            clnt,
+		outstandingReqs: make(map[string]int),
 	}
 	go lb.monitorPods(k8sclnt)
 	return lb
@@ -82,6 +85,8 @@ func (lb *LB) updatePodIPs(ips map[string]bool) {
 	for ip := range ips {
 		log.Printf("Add pod IP to backends: %v", ip)
 		lb.podIPs = append(lb.podIPs, ip)
+		addr := ip + ":8080"
+		lb.outstandingReqs[addr] = 0
 	}
 }
 
@@ -102,7 +107,7 @@ func (lb *LB) monitorPods(k8sclnt *kubernetes.Clientset) {
 	}
 }
 
-func (lb *LB) getBackendPodAddr() string {
+func (lb *LB) getBackendPodAddrRR() string {
 	lb.mu.Lock()
 	defer lb.mu.Unlock()
 
@@ -114,11 +119,50 @@ func (lb *LB) getBackendPodAddr() string {
 	return ip + ":8080"
 }
 
+func (lb *LB) getBackendPodAddrClntSideQLen() string {
+	lb.mu.Lock()
+	defer lb.mu.Unlock()
+
+	// Find the backend pod with the shortes qlen
+	addr := ""
+	minQLen := -1
+	for a, qlen := range lb.outstandingReqs {
+		if qlen < minQLen || minQLen == -1 {
+			minQLen = qlen
+			addr = a
+		}
+	}
+	lb.outstandingReqs[addr]++
+	return addr
+}
+
+func (lb *LB) getBackendPodAddr() string {
+	switch lb.t {
+	case LB_RR:
+		return lb.getBackendPodAddrRR()
+	case LB_ClntSideQLen:
+		return lb.getBackendPodAddrClntSideQLen()
+	default:
+		log.Fatalf("Unimplemented LB of type %v", lb.t)
+		return "unimplemented-lb-type"
+	}
+}
+
+// TODO: better naming scheme?
+// Note that a request to addr has completed
+func (lb *LB) putBackendPodAddr(addr string) {
+	lb.mu.Lock()
+	defer lb.mu.Unlock()
+
+	lb.outstandingReqs[addr]--
+}
+
 // Load-balance requests across backend replicas, and forward the reply back to
 // the caller.
 func (lb *LB) lbHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("LB handler, URL:%v", r.URL)
 	addr := lb.getBackendPodAddr()
+	defer lb.putBackendPodAddr(addr)
 	proxyURL := "http://" + addr + "/spin?" + r.URL.RawQuery
 	log.Printf("proxy URL: %v", proxyURL)
 	resp, err := lb.clnt.Get(proxyURL)

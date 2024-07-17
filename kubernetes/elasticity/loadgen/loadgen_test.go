@@ -143,11 +143,13 @@ func (s *Stats) getDebugCtxStr() string {
 	return fmt.Sprintf("[t=%v,svc=%v]", timeToTicks(time.Now())-s.start, "wfe")
 }
 
-func doRequest(t *testing.T, wg *sync.WaitGroup, stats *Stats, clntXXX *http.Client, baseurl string, id int64) {
+func doRequest(t *testing.T, wg *sync.WaitGroup, stats *Stats, baseurl string, id int64) {
 	clnt := &http.Client{
 		Timeout:   20 * time.Minute,
 		Transport: http.DefaultTransport,
 	}
+	clnt.Transport.(*http.Transport).MaxIdleConnsPerHost = 100000
+	clnt.Transport.(*http.Transport).MaxIdleConns = 100000
 	defer wg.Done()
 	log.Printf("Req id:%v", id)
 	start := time.Now()
@@ -162,18 +164,12 @@ func doRequest(t *testing.T, wg *sync.WaitGroup, stats *Stats, clntXXX *http.Cli
 	}
 }
 
-func startRequests(t *testing.T, wg *sync.WaitGroup, stats *Stats, cnt *atomic.Int64, clntXXX *http.Client, baseurl string) {
+func startRequests(t *testing.T, wg *sync.WaitGroup, stats *Stats, cnt *atomic.Int64, baseurl string) {
 	msBetweenRequests := 1000 * time.Millisecond / time.Duration(RPS)
-	clnt := &http.Client{
-		Timeout:   20 * time.Minute,
-		Transport: http.DefaultTransport,
-	}
-	clnt.Transport.(*http.Transport).MaxIdleConnsPerHost = 100000
-	clnt.Transport.(*http.Transport).MaxIdleConns = 100000
 	// Kick of requests in separate goroutines
 	for i := 0; i < RPS; i++ {
 		id := cnt.Add(1)
-		go doRequest(t, wg, stats, clnt, baseurl, id)
+		go doRequest(t, wg, stats, baseurl, id)
 		time.Sleep(msBetweenRequests)
 	}
 }
@@ -248,12 +244,6 @@ func (s *Stats) monitorK8sClusterStatus(t *testing.T, k8sclnt *kubernetes.Client
 func TestLoadgen(t *testing.T) {
 	log.Printf("Loadgen exp_dur:%v spin_dur:%v rps:%v addr:%v", EXP_DUR, DUR, RPS, ADDR)
 	baseurl := "http://" + ADDR + "/spin?dur=" + DUR.String()
-	clnt := &http.Client{
-		Timeout:   20 * time.Minute,
-		Transport: http.DefaultTransport,
-	}
-	clnt.Transport.(*http.Transport).MaxIdleConnsPerHost = 100000
-	clnt.Transport.(*http.Transport).MaxIdleConns = 100000
 	k8sclnt := newK8sClnt(t)
 	stats := newStats()
 	var wg sync.WaitGroup
@@ -263,7 +253,7 @@ func TestLoadgen(t *testing.T) {
 	start := time.Now()
 	for time.Since(start) < EXP_DUR {
 		wg.Add(RPS)
-		go startRequests(t, &wg, stats, &cnt, clnt, baseurl)
+		go startRequests(t, &wg, stats, &cnt, baseurl)
 		time.Sleep(1 * time.Second)
 	}
 	wg.Wait()
