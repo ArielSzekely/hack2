@@ -136,22 +136,19 @@ func TestRegisterDeregisterOnly(t *testing.T) {
 
 	var idx atomic.Int32
 	idx.Add(1)
-	writeLG := loadgen.NewLoadGenerator(dur, writeRPS, func(r *rand.Rand) (time.Duration, bool) {
+	writeLG := loadgen.NewLoadGenerator(dur, writeRPS/2, func(r *rand.Rand) (time.Duration, bool) {
 		i := int(idx.Add(1))
 		id := "svc-replica-" + strconv.Itoa(i/2)
-		if i%2 == 0 {
-			reg := &consul.AgentServiceRegistration{
-				ID:      id,
-				Name:    SVC_NAME,
-				Port:    PORT_OFFSET + i,
-				Address: "127.0.0.1",
-			}
-			err := c.Agent().ServiceRegister(reg)
-			assert.Nil(t, err, "Err register: %v", err)
-		} else {
-			err := c.Agent().ServiceDeregister(id)
-			assert.Nil(t, err, "Err deregister: %v", err)
+		reg := &consul.AgentServiceRegistration{
+			ID:      id,
+			Name:    SVC_NAME,
+			Port:    PORT_OFFSET + i,
+			Address: "127.0.0.1",
 		}
+		err := c.Agent().ServiceRegister(reg)
+		assert.Nil(t, err, "Err register: %v", err)
+		err = c.Agent().ServiceDeregister(id)
+		assert.Nil(t, err, "Err deregister: %v", err)
 		return 0, false
 	})
 	db.DPrintf(db.TEST, "Calibrating write load generator")
@@ -185,22 +182,19 @@ func TestRegisterDeregisterGet(t *testing.T) {
 
 	var idx atomic.Int32
 	idx.Add(1)
-	writeLG := loadgen.NewLoadGenerator(dur, writeRPS, func(r *rand.Rand) (time.Duration, bool) {
+	writeLG := loadgen.NewLoadGenerator(dur, writeRPS/2, func(r *rand.Rand) (time.Duration, bool) {
 		i := int(idx.Add(1))
 		id := "svc-replica-" + strconv.Itoa(i/2)
-		if i%2 == 0 {
-			reg := &consul.AgentServiceRegistration{
-				ID:      id,
-				Name:    SVC_NAME,
-				Port:    PORT_OFFSET + i,
-				Address: "127.0.0.1",
-			}
-			err := c.Agent().ServiceRegister(reg)
-			assert.Nil(t, err, "Err register: %v", err)
-		} else {
-			err := c.Agent().ServiceDeregister(id)
-			assert.Nil(t, err, "Err deregister: %v", err)
+		reg := &consul.AgentServiceRegistration{
+			ID:      id,
+			Name:    SVC_NAME,
+			Port:    PORT_OFFSET + i,
+			Address: "127.0.0.1",
 		}
+		err := c.Agent().ServiceRegister(reg)
+		assert.Nil(t, err, "Err register: %v", err)
+		err = c.Agent().ServiceDeregister(id)
+		assert.Nil(t, err, "Err deregister: %v", err)
 		return 0, false
 	})
 	readLG := loadgen.NewLoadGenerator(dur, readRPS, func(r *rand.Rand) (time.Duration, bool) {
