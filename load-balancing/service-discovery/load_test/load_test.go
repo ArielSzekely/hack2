@@ -138,7 +138,7 @@ func TestRegisterDeregisterOnly(t *testing.T) {
 	idx.Add(1)
 	writeLG := loadgen.NewLoadGenerator(dur, writeRPS, func(r *rand.Rand) (time.Duration, bool) {
 		i := int(idx.Add(1))
-		id := "svc-replica-" + strconv.Itoa(i/2)
+		id := "svc-replica-" + strconv.Itoa(i)
 		reg := &consul.AgentServiceRegistration{
 			ID:      id,
 			Name:    SVC_NAME,
@@ -184,7 +184,7 @@ func TestRegisterDeregisterGet(t *testing.T) {
 	idx.Add(1)
 	writeLG := loadgen.NewLoadGenerator(dur, writeRPS, func(r *rand.Rand) (time.Duration, bool) {
 		i := int(idx.Add(1))
-		id := "svc-replica-" + strconv.Itoa(i/2)
+		id := "svc-replica-" + strconv.Itoa(i)
 		reg := &consul.AgentServiceRegistration{
 			ID:      id,
 			Name:    SVC_NAME,
