@@ -20,7 +20,7 @@ import (
 const (
 	PORT_OFFSET = 10000
 	SVC_NAME    = "mysvc"
-	SVC2_NAME   = "someoneelsessvc"
+	SVC2_NAME   = "notmysvc"
 )
 
 var nClnt int
@@ -42,7 +42,7 @@ func init() {
 }
 
 func populateRegistry(t *testing.T, c *consul.Client, svcname string, ninstances int) error {
-	db.DPrintf(db.TEST, "Populating service registry with %v entries", minEntries)
+	db.DPrintf(db.TEST, "Populating service registry with %v entries of svc %v", ninstances, svcname)
 	for i := 0; i < ninstances; i++ {
 		reg := &consul.AgentServiceRegistration{
 			ID:      "min-svc-replica-" + strconv.Itoa(i),
