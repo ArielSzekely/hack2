@@ -33,7 +33,7 @@ func init() {
 func TestCompile(t *testing.T) {
 }
 
-func TestRegister(t *testing.T) {
+func TestRegisterOnly(t *testing.T) {
 	cfg := consul.DefaultConfig()
 	cfg.Address = consulAddr
 
