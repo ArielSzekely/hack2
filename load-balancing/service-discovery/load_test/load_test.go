@@ -53,14 +53,27 @@ func populateRegistry(t *testing.T, c *consul.Client) error {
 	}
 	// Check that right number of services was registered
 	svcs, err := c.Agent().ServicesWithFilter("Service==" + SVC_NAME)
-	if !assert.Nil(t, err, "Err get first: %v", err) {
+	if !assert.Nil(t, err, "Err get check initial: %v", err) {
 		return err
 	}
-	if !assert.Equal(t, minEntries, len(svcs), "Wrong num entries") {
+	if !assert.Equal(t, minEntries, len(svcs), "Wrong num entries initial") {
 		return fmt.Errorf("Wrong num entries %v != %v", minEntries, len(svcs))
 	}
 	db.DPrintf(db.TEST, "Done populating service registry with %v entries", minEntries)
 	return nil
+}
+
+func checkRegistry(t *testing.T, c *consul.Client) {
+	db.DPrintf(db.TEST, "Checking final registry contents")
+	// Check that right number of services was registered
+	svcs, err := c.Agent().ServicesWithFilter("Service==" + SVC_NAME)
+	if !assert.Nil(t, err, "Err get check: %v", err) {
+		return
+	}
+	if !assert.True(t, minEntries <= len(svcs), "Wrong num entries final") {
+		return
+	}
+	db.DPrintf(db.TEST, "Done checking final registry contents")
 }
 
 func TestCompile(t *testing.T) {
@@ -113,6 +126,7 @@ func TestRegisterDeregisterOnly(t *testing.T) {
 	if err := populateRegistry(t, c); !assert.Nil(t, err, "Err register first: %v", err) {
 		return
 	}
+	defer checkRegistry(t, c)
 
 	var idx atomic.Int32
 	idx.Add(1)
@@ -156,6 +170,7 @@ func TestRegisterDeregisterGet(t *testing.T) {
 	if err := populateRegistry(t, c); !assert.Nil(t, err, "Err register first: %v", err) {
 		return
 	}
+	defer checkRegistry(t, c)
 
 	var wg sync.WaitGroup
 
