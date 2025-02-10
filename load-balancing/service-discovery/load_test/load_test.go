@@ -20,10 +20,12 @@ import (
 const (
 	PORT_OFFSET = 10000
 	SVC_NAME    = "mysvc"
+	SVC2_NAME   = "someoneelsessvc"
 )
 
 var nClnt int
 var minEntries int
+var unrelatedEntries int
 var writeRPS int
 var readRPS int
 var dur time.Duration
@@ -32,18 +34,19 @@ var consulAddr string
 func init() {
 	flag.IntVar(&nClnt, "n_clnt", 1, "Number of clients")
 	flag.IntVar(&minEntries, "min_entries", 2, "Minimum number of entries in the service registry at any one time")
+	flag.IntVar(&unrelatedEntries, "n_other_entries", 0, "Entries belonging to unrelated services")
 	flag.DurationVar(&dur, "dur", 10*time.Second, "Duration")
 	flag.StringVar(&consulAddr, "consul_addr", "127.0.0.1:8500", "Consul server addr")
 	flag.IntVar(&writeRPS, "write_rps", 1, "Write requests per second")
 	flag.IntVar(&readRPS, "read_rps", 1, "Read requests per second")
 }
 
-func populateRegistry(t *testing.T, c *consul.Client) error {
+func populateRegistry(t *testing.T, c *consul.Client, svcname string, ninstances int) error {
 	db.DPrintf(db.TEST, "Populating service registry with %v entries", minEntries)
-	for i := 0; i < minEntries; i++ {
+	for i := 0; i < ninstances; i++ {
 		reg := &consul.AgentServiceRegistration{
 			ID:      "min-svc-replica-" + strconv.Itoa(i),
-			Name:    SVC_NAME,
+			Name:    svcname,
 			Port:    i,
 			Address: "127.0.0.1",
 		}
@@ -52,14 +55,14 @@ func populateRegistry(t *testing.T, c *consul.Client) error {
 		}
 	}
 	// Check that right number of services was registered
-	svcs, err := c.Agent().ServicesWithFilter("Service==" + SVC_NAME)
+	svcs, err := c.Agent().ServicesWithFilter("Service==" + svcname)
 	if !assert.Nil(t, err, "Err get check initial: %v", err) {
 		return err
 	}
-	if !assert.Equal(t, minEntries, len(svcs), "Wrong num entries initial") {
-		return fmt.Errorf("Wrong num entries %v != %v", minEntries, len(svcs))
+	if !assert.Equal(t, ninstances, len(svcs), "Wrong num entries initial") {
+		return fmt.Errorf("Wrong num entries %v != %v", ninstances, len(svcs))
 	}
-	db.DPrintf(db.TEST, "Done populating service registry with %v entries", minEntries)
+	db.DPrintf(db.TEST, "Done populating service registry with %v entries", ninstances)
 	return nil
 }
 
@@ -123,7 +126,10 @@ func TestRegisterDeregisterOnly(t *testing.T) {
 	}
 	db.DPrintf(db.TEST, "Created client")
 
-	if err := populateRegistry(t, c); !assert.Nil(t, err, "Err register first: %v", err) {
+	if err := populateRegistry(t, c, SVC_NAME, minEntries); !assert.Nil(t, err, "Err populate registry: %v", err) {
+		return
+	}
+	if err := populateRegistry(t, c, SVC2_NAME, unrelatedEntries); !assert.Nil(t, err, "Err populate registry unrelated: %v", err) {
 		return
 	}
 	defer checkRegistry(t, c)
@@ -167,7 +173,10 @@ func TestRegisterDeregisterGet(t *testing.T) {
 
 	db.DPrintf(db.TEST, "Created client")
 
-	if err := populateRegistry(t, c); !assert.Nil(t, err, "Err register first: %v", err) {
+	if err := populateRegistry(t, c, SVC_NAME, minEntries); !assert.Nil(t, err, "Err populate registry: %v", err) {
+		return
+	}
+	if err := populateRegistry(t, c, SVC2_NAME, unrelatedEntries); !assert.Nil(t, err, "Err populate registry unrelated: %v", err) {
 		return
 	}
 	defer checkRegistry(t, c)
