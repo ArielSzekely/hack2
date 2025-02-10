@@ -45,7 +45,7 @@ func populateRegistry(t *testing.T, c *consul.Client, svcname string, ninstances
 	db.DPrintf(db.TEST, "Populating service registry with %v entries of svc %v", ninstances, svcname)
 	for i := 0; i < ninstances; i++ {
 		reg := &consul.AgentServiceRegistration{
-			ID:      "min-svc-replica-" + strconv.Itoa(i),
+			ID:      svcname + "-min-svc-replica-" + strconv.Itoa(i),
 			Name:    svcname,
 			Port:    i,
 			Address: "127.0.0.1",
