@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1-experimental
 
-FROM golang:alpine AS base
+FROM golang:alpine3.21 AS base
 
 WORKDIR /app
 
