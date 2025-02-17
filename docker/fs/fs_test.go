@@ -14,10 +14,12 @@ import (
 
 var dataDirPath string
 var nOps int
+var nDummyFiles int
 
 func init() {
 	flag.StringVar(&dataDirPath, "data_dir_path", "/data", "path to data dir")
 	flag.IntVar(&nOps, "n_ops", 1000, "Number of ops")
+	flag.IntVar(&nDummyFiles, "n_dummy_files", 0, "Number of dummy files")
 }
 
 func TestCompile(t *testing.T) {
@@ -60,9 +62,15 @@ func writeAtomic(path string) error {
 }
 
 func TestWriteAtomic(t *testing.T) {
+	for i := 0; i < nDummyFiles; i++ {
+		err := writeAtomic(filepath.Join(dataDirPath, strconv.Itoa(i+nOps)))
+		if !assert.Nil(t, err, "Err writeAtomic: %v", err) {
+			return
+		}
+	}
 	start := time.Now()
 	defer func(start time.Time) {
-		log.Printf("elapsed:%v ops:%v time/op:%v", time.Since(start), nOps, time.Since(start).Seconds()/float64(nOps))
+		log.Printf("elapsed:%v ops:%v time/op:%0.4fs", time.Since(start), nOps, time.Since(start).Seconds()/float64(nOps))
 	}(start)
 	for i := 0; i < nOps; i++ {
 		err := writeAtomic(filepath.Join(dataDirPath, strconv.Itoa(i)))
