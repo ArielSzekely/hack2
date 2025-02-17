@@ -70,11 +70,14 @@ func TestWriteAtomic(t *testing.T) {
 	}
 	start := time.Now()
 	defer func(start time.Time) {
-		log.Printf("elapsed:%v ops:%v time/op:%0.4fs", time.Since(start), nOps, time.Since(start).Seconds()/float64(nOps))
+		log.Printf("elapsed:%v ops:%v time/op:%0.4fs", time.Since(start), nOps, time.Since(start).Seconds()/(float64(nOps)*2))
 	}(start)
 	for i := 0; i < nOps; i++ {
-		err := writeAtomic(filepath.Join(dataDirPath, strconv.Itoa(i)))
-		if !assert.Nil(t, err, "Err writeAtomic: %v", err) {
+		pn := filepath.Join(dataDirPath, strconv.Itoa(i))
+		if err := writeAtomic(pn); !assert.Nil(t, err, "Err writeAtomic: %v", err) {
+			return
+		}
+		if err := os.Remove(pn); !assert.Nil(t, err, "Err writeAtomic: %v", err) {
 			return
 		}
 	}
