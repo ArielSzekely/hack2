@@ -12,4 +12,7 @@ docker run --rm -d \
   --publish 4383:2383 \
   bitnami/etcd:latest
 
+# Sleep for a bit (it sometimes takes time for etcd to be ready)
+sleep 5
+
 echo "done starting etcd"
