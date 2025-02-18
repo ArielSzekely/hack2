@@ -223,24 +223,18 @@ func TestRegisterDeregisterGet(t *testing.T) {
 	db.DPrintf(db.TEST, "Done")
 }
 
-func watcher(t *testing.T, wc clientv3.WatchChan, done chan bool, wg *sync.WaitGroup) {
-	for {
-		select {
-		case resp := <-wc:
-			ncreate := 0
-			for _, e := range resp.Events {
-				if e.IsCreate() {
-					ncreate++
-				}
-			}
-			if ncreate > 0 {
-				// Consume the next creation event, and ack that it has been consumed
-				wg.Done()
-				assert.Equal(t, ncreate, 1, "Wrong num create events")
-			}
-		case <-done:
-			return
+func watch(t *testing.T, wc clientv3.WatchChan, wg *sync.WaitGroup) {
+	resp := <-wc
+	ncreate := 0
+	for _, e := range resp.Events {
+		if e.IsCreate() {
+			ncreate++
 		}
+	}
+	if ncreate > 0 {
+		// Consume the next creation event, and ack that it has been consumed
+		wg.Done()
+		assert.Equal(t, ncreate, 1, "Wrong num create events")
 	}
 }
 
@@ -263,11 +257,11 @@ func TestRegisterDeregisterWatch(t *testing.T) {
 	}
 	defer checkRegistry(t, c)
 
-	var watchers sync.WaitGroup
 	var wg sync.WaitGroup
-	done := make(chan bool)
 
-	for i := 0; i < nWatchers; i++ {
+	clnts := make([]*clientv3.Client, nWatchers)
+
+	for i := 0; i < len(clnts); i++ {
 		// Create a new client for this watcher
 		c, err := clientv3.New(clientv3.Config{
 			Endpoints:   []string{etcdAddr},
@@ -276,14 +270,21 @@ func TestRegisterDeregisterWatch(t *testing.T) {
 		if !assert.Nil(t, err, "Err etcd NewClient: %v", err) {
 			return
 		}
-		wc := c.Watch(context.TODO(), SVC_NAME, clientv3.WithPrefix())
-		go watcher(t, wc, done, &watchers)
+		clnts[i] = c
 	}
 
 	var idx atomic.Int32
 	idx.Add(1)
 	writeLG := loadgen.NewLoadGenerator(dur, writeRPS, func(r *rand.Rand) (time.Duration, bool) {
+		var watchers sync.WaitGroup
 		watchers.Add(nWatchers)
+
+		// Start a bunch of goroutines to watch for a change
+		for _, c := range clnts {
+			wc := c.Watch(context.TODO(), SVC_NAME, clientv3.WithPrefix())
+			go watch(t, wc, &watchers)
+		}
+
 		i := int(idx.Add(1))
 		id := "svc-replica-" + strconv.Itoa(i)
 		addr := "127.0.0.1:" + strconv.Itoa(PORT_OFFSET+i)
@@ -321,8 +322,6 @@ func TestRegisterDeregisterWatch(t *testing.T) {
 	writeLG.Stats()
 	db.DPrintf(db.TEST, "Read load-generator stats:")
 	db.DPrintf(db.TEST, "Stop watchers")
-	for i := 0; i < nWatchers; i++ {
-		done <- true
-	}
+
 	db.DPrintf(db.TEST, "Done")
 }
