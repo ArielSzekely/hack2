@@ -223,7 +223,7 @@ func TestRegisterDeregisterGet(t *testing.T) {
 	db.DPrintf(db.TEST, "Done")
 }
 
-func watch(t *testing.T, wc clientv3.WatchChan, wg *sync.WaitGroup) {
+func watchManyWriters(t *testing.T, wc clientv3.WatchChan, wg *sync.WaitGroup) {
 	resp := <-wc
 	ncreate := 0
 	for _, e := range resp.Events {
@@ -234,11 +234,10 @@ func watch(t *testing.T, wc clientv3.WatchChan, wg *sync.WaitGroup) {
 	if ncreate > 0 {
 		// Consume the next creation event, and ack that it has been consumed
 		wg.Done()
-		assert.Equal(t, ncreate, 1, "Wrong num create events")
 	}
 }
 
-func TestRegisterDeregisterWatch(t *testing.T) {
+func TestRegisterDeregisterWatchManyWriters(t *testing.T) {
 	c, err := clientv3.New(clientv3.Config{
 		Endpoints:   []string{etcdAddr},
 		DialTimeout: 2 * time.Second,
@@ -282,7 +281,7 @@ func TestRegisterDeregisterWatch(t *testing.T) {
 		// Start a bunch of goroutines to watch for a change
 		for _, c := range clnts {
 			wc := c.Watch(context.TODO(), SVC_NAME, clientv3.WithPrefix())
-			go watch(t, wc, &watchers)
+			go watchManyWriters(t, wc, &watchers)
 		}
 
 		i := int(idx.Add(1))
@@ -323,5 +322,109 @@ func TestRegisterDeregisterWatch(t *testing.T) {
 	db.DPrintf(db.TEST, "Read load-generator stats:")
 	db.DPrintf(db.TEST, "Stop watchers")
 
+	db.DPrintf(db.TEST, "Done")
+}
+
+func watcherOneWriter(t *testing.T, wc clientv3.WatchChan, done chan bool, wg *sync.WaitGroup) {
+	for {
+		select {
+		case resp := <-wc:
+			ncreate := 0
+			for _, e := range resp.Events {
+				if e.IsCreate() {
+					ncreate++
+				}
+			}
+			if ncreate > 0 {
+				// Consume the next creation event, and ack that it has been consumed
+				wg.Done()
+				assert.Equal(t, ncreate, 1, "Wrong num create events")
+			}
+		case <-done:
+			return
+		}
+	}
+}
+
+func TestRegisterDeregisterWatchOneWriter(t *testing.T) {
+	c, err := clientv3.New(clientv3.Config{
+		Endpoints:   []string{etcdAddr},
+		DialTimeout: 2 * time.Second,
+	})
+	if !assert.Nil(t, err, "Err etcd NewClient: %v", err) {
+		return
+	}
+
+	db.DPrintf(db.TEST, "Created client")
+
+	if err := populateRegistry(t, c, SVC_NAME, minEntries); !assert.Nil(t, err, "Err populate registry: %v", err) {
+		return
+	}
+	if err := populateRegistry(t, c, SVC2_NAME, unrelatedEntries); !assert.Nil(t, err, "Err populate registry unrelated: %v", err) {
+		return
+	}
+	defer checkRegistry(t, c)
+
+	var watchers sync.WaitGroup
+	var wg sync.WaitGroup
+	done := make(chan bool)
+
+	for i := 0; i < nWatchers; i++ {
+		// Create a new client for this watcher
+		c, err := clientv3.New(clientv3.Config{
+			Endpoints:   []string{etcdAddr},
+			DialTimeout: 2 * time.Second,
+		})
+		if !assert.Nil(t, err, "Err etcd NewClient: %v", err) {
+			return
+		}
+		wc := c.Watch(context.TODO(), SVC_NAME, clientv3.WithPrefix())
+		go watcherOneWriter(t, wc, done, &watchers)
+	}
+
+	var idx atomic.Int32
+	idx.Add(1)
+	writeLG := loadgen.NewLoadGenerator(dur, writeRPS, func(r *rand.Rand) (time.Duration, bool) {
+		watchers.Add(nWatchers)
+		i := int(idx.Add(1))
+		id := "svc-replica-" + strconv.Itoa(i)
+		addr := "127.0.0.1:" + strconv.Itoa(PORT_OFFSET+i)
+		key := filepath.Join(SVC_NAME, id)
+
+		// Note the put timestamp
+		start := time.Now()
+
+		// Put a value, releasing watchers
+		_, err := c.Put(context.TODO(), key, addr)
+		assert.Nil(t, err, "Err Put: %v", err)
+
+		// Wait for the watchers to all be notified of the change, and measure how
+		// long it took
+		watchers.Wait()
+		elapsed := time.Since(start)
+
+		resp, err := c.Delete(context.TODO(), key)
+		assert.Nil(t, err, "Err Delete: %v", err)
+		assert.Equal(t, int(resp.Deleted), 1, "Err wrong number deleted: %v != 1", resp.Deleted)
+		return elapsed, true
+	})
+	db.DPrintf(db.TEST, "Calibrating write load generator")
+	writeLG.Calibrate()
+	db.DPrintf(db.TEST, "Done calibrating write load generator")
+	// Start write load-generator
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		writeLG.Run()
+	}()
+	// Start read load-generator
+	wg.Wait()
+	db.DPrintf(db.TEST, "Write load-generator stats:")
+	writeLG.Stats()
+	db.DPrintf(db.TEST, "Read load-generator stats:")
+	db.DPrintf(db.TEST, "Stop watchers")
+	for i := 0; i < nWatchers; i++ {
+		done <- true
+	}
 	db.DPrintf(db.TEST, "Done")
 }
