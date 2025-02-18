@@ -1,17 +1,19 @@
 package load_test
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"math/rand"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	consul "github.com/hashicorp/consul/api"
 	"github.com/stretchr/testify/assert"
+	"go.etcd.io/etcd/client/v3"
 
 	"sigmaos/benchmarks/loadgen"
 	db "sigmaos/debug"
@@ -29,51 +31,48 @@ var unrelatedEntries int
 var writeRPS int
 var readRPS int
 var dur time.Duration
-var consulAddr string
+var etcdAddr string
 
 func init() {
 	flag.IntVar(&nClnt, "n_clnt", 1, "Number of clients")
 	flag.IntVar(&minEntries, "min_entries", 2, "Minimum number of entries in the service registry at any one time")
 	flag.IntVar(&unrelatedEntries, "n_other_entries", 0, "Entries belonging to unrelated services")
 	flag.DurationVar(&dur, "dur", 10*time.Second, "Duration")
-	flag.StringVar(&consulAddr, "consul_addr", "127.0.0.1:8500", "Consul server addr")
+	flag.StringVar(&etcdAddr, "etcd_addr", "127.0.0.1:4379", "Etcd port")
 	flag.IntVar(&writeRPS, "write_rps", 1, "Write requests per second")
 	flag.IntVar(&readRPS, "read_rps", 1, "Read requests per second")
 }
 
-func populateRegistry(t *testing.T, c *consul.Client, svcname string, ninstances int) error {
+func populateRegistry(t *testing.T, c *clientv3.Client, svcname string, ninstances int) error {
 	db.DPrintf(db.TEST, "Populating service registry with %v entries of svc %v", ninstances, svcname)
 	for i := 0; i < ninstances; i++ {
-		reg := &consul.AgentServiceRegistration{
-			ID:      svcname + "-min-svc-replica-" + strconv.Itoa(i),
-			Name:    svcname,
-			Port:    i,
-			Address: "127.0.0.1",
-		}
-		if err := c.Agent().ServiceRegister(reg); err != nil {
+		id := "min-svc-replica-" + strconv.Itoa(i)
+		addr := "127.0.0.1:XXXX"
+		key := filepath.Join(svcname, id)
+		if _, err := c.Put(context.TODO(), key, addr); err != nil {
 			return err
 		}
 	}
 	// Check that right number of services was registered
-	svcs, err := c.Agent().ServicesWithFilter("Service==" + svcname)
+	kvs, err := c.Get(context.TODO(), svcname, clientv3.WithPrefix())
 	if !assert.Nil(t, err, "Err get check initial: %v", err) {
 		return err
 	}
-	if !assert.Equal(t, ninstances, len(svcs), "Wrong num entries initial") {
-		return fmt.Errorf("Wrong num entries %v != %v", ninstances, len(svcs))
+	if !assert.Equal(t, ninstances, len(kvs.Kvs), "Wrong num entries initial") {
+		return fmt.Errorf("Wrong num entries %v != %v", ninstances, len(kvs.Kvs))
 	}
 	db.DPrintf(db.TEST, "Done populating service registry with %v entries", ninstances)
 	return nil
 }
 
-func checkRegistry(t *testing.T, c *consul.Client) {
+func checkRegistry(t *testing.T, c *clientv3.Client) {
 	db.DPrintf(db.TEST, "Checking final registry contents")
 	// Check that right number of services was registered
-	svcs, err := c.Agent().ServicesWithFilter("Service==" + SVC_NAME)
+	kvs, err := c.Get(context.TODO(), SVC_NAME, clientv3.WithPrefix())
 	if !assert.Nil(t, err, "Err get check: %v", err) {
 		return
 	}
-	if !assert.True(t, minEntries <= len(svcs), "Wrong num entries final") {
+	if !assert.True(t, minEntries <= len(kvs.Kvs), "Wrong num entries final") {
 		return
 	}
 	db.DPrintf(db.TEST, "Done checking final registry contents")
@@ -83,11 +82,11 @@ func TestCompile(t *testing.T) {
 }
 
 func TestRegisterOnly(t *testing.T) {
-	cfg := consul.DefaultConfig()
-	cfg.Address = consulAddr
-
-	c, err := consul.NewClient(cfg)
-	if !assert.Nil(t, err, "Err consul NewClient: %v", err) {
+	c, err := clientv3.New(clientv3.Config{
+		Endpoints:   []string{etcdAddr},
+		DialTimeout: 2 * time.Second,
+	})
+	if !assert.Nil(t, err, "Err etcd NewClient: %v", err) {
 		return
 	}
 
@@ -98,14 +97,10 @@ func TestRegisterOnly(t *testing.T) {
 	writeLG := loadgen.NewLoadGenerator(dur, writeRPS, func(r *rand.Rand) (time.Duration, bool) {
 		i := int(idx.Add(1))
 		id := "svc-replica-" + strconv.Itoa(i)
-		reg := &consul.AgentServiceRegistration{
-			ID:      id,
-			Name:    SVC_NAME,
-			Port:    PORT_OFFSET + i,
-			Address: "127.0.0.1",
-		}
-		err := c.Agent().ServiceRegister(reg)
-		assert.Nil(t, err, "Err register: %v", err)
+		addr := "127.0.0.1:" + strconv.Itoa(PORT_OFFSET+i)
+		key := filepath.Join(SVC_NAME, id)
+		_, err := c.Put(context.TODO(), key, addr)
+		assert.Nil(t, err, "Err Put: %v", err)
 		return 0, false
 	})
 	db.DPrintf(db.TEST, "Calibrating write load generator")
@@ -117,13 +112,14 @@ func TestRegisterOnly(t *testing.T) {
 }
 
 func TestRegisterDeregisterOnly(t *testing.T) {
-	cfg := consul.DefaultConfig()
-	cfg.Address = consulAddr
-
-	c, err := consul.NewClient(cfg)
-	if !assert.Nil(t, err, "Err consul NewClient: %v", err) {
+	c, err := clientv3.New(clientv3.Config{
+		Endpoints:   []string{etcdAddr},
+		DialTimeout: 2 * time.Second,
+	})
+	if !assert.Nil(t, err, "Err etcd NewClient: %v", err) {
 		return
 	}
+
 	db.DPrintf(db.TEST, "Created client")
 
 	if err := populateRegistry(t, c, SVC_NAME, minEntries); !assert.Nil(t, err, "Err populate registry: %v", err) {
@@ -139,16 +135,13 @@ func TestRegisterDeregisterOnly(t *testing.T) {
 	writeLG := loadgen.NewLoadGenerator(dur, writeRPS, func(r *rand.Rand) (time.Duration, bool) {
 		i := int(idx.Add(1))
 		id := "svc-replica-" + strconv.Itoa(i)
-		reg := &consul.AgentServiceRegistration{
-			ID:      id,
-			Name:    SVC_NAME,
-			Port:    PORT_OFFSET + i,
-			Address: "127.0.0.1",
-		}
-		err := c.Agent().ServiceRegister(reg)
-		assert.Nil(t, err, "Err register: %v", err)
-		err = c.Agent().ServiceDeregister(id)
-		assert.Nil(t, err, "Err deregister: %v", err)
+		addr := "127.0.0.1:" + strconv.Itoa(PORT_OFFSET+i)
+		key := filepath.Join(SVC_NAME, id)
+		_, err := c.Put(context.TODO(), key, addr)
+		assert.Nil(t, err, "Err Put: %v", err)
+		resp, err := c.Delete(context.TODO(), key)
+		assert.Nil(t, err, "Err Delete: %v", err)
+		assert.Equal(t, int(resp.Deleted), 1, "Err wrong number deleted: %v != 1", resp.Deleted)
 		return 0, false
 	})
 	db.DPrintf(db.TEST, "Calibrating write load generator")
@@ -160,11 +153,11 @@ func TestRegisterDeregisterOnly(t *testing.T) {
 }
 
 func TestRegisterDeregisterGet(t *testing.T) {
-	cfg := consul.DefaultConfig()
-	cfg.Address = consulAddr
-
-	c, err := consul.NewClient(cfg)
-	if !assert.Nil(t, err, "Err consul NewClient: %v", err) {
+	c, err := clientv3.New(clientv3.Config{
+		Endpoints:   []string{etcdAddr},
+		DialTimeout: 2 * time.Second,
+	})
+	if !assert.Nil(t, err, "Err etcd NewClient: %v", err) {
 		return
 	}
 
@@ -185,22 +178,21 @@ func TestRegisterDeregisterGet(t *testing.T) {
 	writeLG := loadgen.NewLoadGenerator(dur, writeRPS, func(r *rand.Rand) (time.Duration, bool) {
 		i := int(idx.Add(1))
 		id := "svc-replica-" + strconv.Itoa(i)
-		reg := &consul.AgentServiceRegistration{
-			ID:      id,
-			Name:    SVC_NAME,
-			Port:    PORT_OFFSET + i,
-			Address: "127.0.0.1",
-		}
-		err := c.Agent().ServiceRegister(reg)
-		assert.Nil(t, err, "Err register: %v", err)
-		err = c.Agent().ServiceDeregister(id)
-		assert.Nil(t, err, "Err deregister: %v", err)
+		addr := "127.0.0.1:" + strconv.Itoa(PORT_OFFSET+i)
+		key := filepath.Join(SVC_NAME, id)
+		_, err := c.Put(context.TODO(), key, addr)
+		assert.Nil(t, err, "Err Put: %v", err)
+		resp, err := c.Delete(context.TODO(), key)
+		assert.Nil(t, err, "Err Delete: %v", err)
+		assert.Equal(t, int(resp.Deleted), 1, "Err wrong number deleted: %v != 1", resp.Deleted)
 		return 0, false
 	})
 	readLG := loadgen.NewLoadGenerator(dur, readRPS, func(r *rand.Rand) (time.Duration, bool) {
-		svcs, err := c.Agent().ServicesWithFilter("Service==" + SVC_NAME)
+		kvs, err := c.Get(context.TODO(), SVC_NAME, clientv3.WithPrefix())
+		assert.Nil(t, err, "Err get check initial: %v", err)
 		assert.Nil(t, err, "Err get: %v", err)
-		assert.True(t, len(svcs) > 1, "No services returned")
+		assert.True(t, len(kvs.Kvs) > 1, "No services returned")
+		assert.True(t, len(kvs.Kvs) >= minEntries, "Too few services returned")
 		return 0, false
 	})
 	db.DPrintf(db.TEST, "Calibrating write load generator")
