@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.etcd.io/etcd/client/v3"
 
+	"load_test/util"
 	"sigmaos/benchmarks/loadgen"
 	db "sigmaos/debug"
 )
@@ -132,10 +133,25 @@ func TestRegisterDeregisterOnly(t *testing.T) {
 	}
 	defer checkRegistry(t, c)
 
+	// Create clients
+	clnts := make([]*clientv3.Client, nClnt)
+	for i := range clnts {
+		// Create a new client for the writer
+		c, err := clientv3.New(clientv3.Config{
+			Endpoints:   []string{etcdAddr},
+			DialTimeout: 2 * time.Second,
+		})
+		if !assert.Nil(t, err, "Err etcd NewClient: %v", err) {
+			return
+		}
+		clnts[i] = c
+	}
+
 	var idx atomic.Int32
 	idx.Add(1)
 	writeLG := loadgen.NewLoadGenerator(dur, writeRPS, func(r *rand.Rand) (time.Duration, bool) {
 		i := int(idx.Add(1))
+		c := clnts[i%len(clnts)]
 		id := "svc-replica-" + strconv.Itoa(i)
 		addr := "127.0.0.1:" + strconv.Itoa(PORT_OFFSET+i)
 		key := filepath.Join(SVC_NAME, id)
@@ -173,12 +189,27 @@ func TestRegisterDeregisterGet(t *testing.T) {
 	}
 	defer checkRegistry(t, c)
 
+	// Create clients
+	clnts := make([]*clientv3.Client, nClnt)
+	for i := range clnts {
+		// Create a new client for the writer
+		c, err := clientv3.New(clientv3.Config{
+			Endpoints:   []string{etcdAddr},
+			DialTimeout: 2 * time.Second,
+		})
+		if !assert.Nil(t, err, "Err etcd NewClient: %v", err) {
+			return
+		}
+		clnts[i] = c
+	}
+
 	var wg sync.WaitGroup
 
 	var idx atomic.Int32
 	idx.Add(1)
 	writeLG := loadgen.NewLoadGenerator(dur, writeRPS, func(r *rand.Rand) (time.Duration, bool) {
 		i := int(idx.Add(1))
+		c := clnts[i%len(clnts)]
 		id := "svc-replica-" + strconv.Itoa(i)
 		addr := "127.0.0.1:" + strconv.Itoa(PORT_OFFSET+i)
 		key := filepath.Join(SVC_NAME, id)
@@ -223,122 +254,16 @@ func TestRegisterDeregisterGet(t *testing.T) {
 	db.DPrintf(db.TEST, "Done")
 }
 
-func watchManyWriters(t *testing.T, wc clientv3.WatchChan, wg *sync.WaitGroup) {
-	resp := <-wc
-	ncreate := 0
-	for _, e := range resp.Events {
-		if e.IsCreate() {
-			ncreate++
-		}
-	}
-	if ncreate > 0 {
-		// Consume the next creation event, and ack that it has been consumed
-		wg.Done()
-	}
-}
-
-func TestRegisterDeregisterWatchManyWriters(t *testing.T) {
-	c, err := clientv3.New(clientv3.Config{
-		Endpoints:   []string{etcdAddr},
-		DialTimeout: 2 * time.Second,
-	})
-	if !assert.Nil(t, err, "Err etcd NewClient: %v", err) {
-		return
-	}
-
-	db.DPrintf(db.TEST, "Created client")
-
-	if err := populateRegistry(t, c, SVC_NAME, minEntries); !assert.Nil(t, err, "Err populate registry: %v", err) {
-		return
-	}
-	if err := populateRegistry(t, c, SVC2_NAME, unrelatedEntries); !assert.Nil(t, err, "Err populate registry unrelated: %v", err) {
-		return
-	}
-	defer checkRegistry(t, c)
-
-	var wg sync.WaitGroup
-
-	clnts := make([]*clientv3.Client, nWatchers)
-
-	for i := 0; i < len(clnts); i++ {
-		// Create a new client for this watcher
-		c, err := clientv3.New(clientv3.Config{
-			Endpoints:   []string{etcdAddr},
-			DialTimeout: 2 * time.Second,
-		})
-		if !assert.Nil(t, err, "Err etcd NewClient: %v", err) {
-			return
-		}
-		clnts[i] = c
-	}
-
-	var idx atomic.Int32
-	idx.Add(1)
-	writeLG := loadgen.NewLoadGenerator(dur, writeRPS, func(r *rand.Rand) (time.Duration, bool) {
-		var watchers sync.WaitGroup
-		watchers.Add(nWatchers)
-
-		// Start a bunch of goroutines to watch for a change
-		for _, c := range clnts {
-			wc := c.Watch(context.TODO(), SVC_NAME, clientv3.WithPrefix())
-			go watchManyWriters(t, wc, &watchers)
-		}
-
-		i := int(idx.Add(1))
-		id := "svc-replica-" + strconv.Itoa(i)
-		addr := "127.0.0.1:" + strconv.Itoa(PORT_OFFSET+i)
-		key := filepath.Join(SVC_NAME, id)
-
-		// Note the put timestamp
-		start := time.Now()
-
-		// Put a value, releasing watchers
-		_, err := c.Put(context.TODO(), key, addr)
-		assert.Nil(t, err, "Err Put: %v", err)
-
-		// Wait for the watchers to all be notified of the change, and measure how
-		// long it took
-		watchers.Wait()
-		elapsed := time.Since(start)
-
-		resp, err := c.Delete(context.TODO(), key)
-		assert.Nil(t, err, "Err Delete: %v", err)
-		assert.Equal(t, int(resp.Deleted), 1, "Err wrong number deleted: %v != 1", resp.Deleted)
-		return elapsed, true
-	})
-	db.DPrintf(db.TEST, "Calibrating write load generator")
-	writeLG.Calibrate()
-	db.DPrintf(db.TEST, "Done calibrating write load generator")
-	// Start write load-generator
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		writeLG.Run()
-	}()
-	// Start read load-generator
-	wg.Wait()
-	db.DPrintf(db.TEST, "Write load-generator stats:")
-	writeLG.Stats()
-	db.DPrintf(db.TEST, "Read load-generator stats:")
-	db.DPrintf(db.TEST, "Stop watchers")
-
-	db.DPrintf(db.TEST, "Done")
-}
-
-func watcherOneWriter(t *testing.T, wc clientv3.WatchChan, done chan bool, wg *sync.WaitGroup) {
+func watcher(t *testing.T, wc clientv3.WatchChan, done chan bool, wm *util.WatchMap) {
 	for {
 		select {
 		case resp := <-wc:
-			ncreate := 0
 			for _, e := range resp.Events {
 				if e.IsCreate() {
-					ncreate++
+					// Notify the writer that this watcher heard about the create
+					wg := wm.Get(string(e.Kv.Key))
+					wg.Done()
 				}
-			}
-			if ncreate > 0 {
-				// Consume the next creation event, and ack that it has been consumed
-				wg.Done()
-				assert.Equal(t, ncreate, 1, "Wrong num create events")
 			}
 		case <-done:
 			return
@@ -346,7 +271,7 @@ func watcherOneWriter(t *testing.T, wc clientv3.WatchChan, done chan bool, wg *s
 	}
 }
 
-func TestRegisterDeregisterWatchOneWriter(t *testing.T) {
+func TestRegisterDeregisterWatch(t *testing.T) {
 	c, err := clientv3.New(clientv3.Config{
 		Endpoints:   []string{etcdAddr},
 		DialTimeout: 2 * time.Second,
@@ -365,7 +290,7 @@ func TestRegisterDeregisterWatchOneWriter(t *testing.T) {
 	}
 	defer checkRegistry(t, c)
 
-	var watchers sync.WaitGroup
+	wm := util.NewWatchMap()
 	var wg sync.WaitGroup
 	done := make(chan bool)
 
@@ -379,17 +304,32 @@ func TestRegisterDeregisterWatchOneWriter(t *testing.T) {
 			return
 		}
 		wc := c.Watch(context.TODO(), SVC_NAME, clientv3.WithPrefix())
-		go watcherOneWriter(t, wc, done, &watchers)
+		go watcher(t, wc, done, wm)
+	}
+
+	// Create writer clients
+	wClnts := make([]*clientv3.Client, nClnt)
+	for i := range wClnts {
+		// Create a new client for the writer
+		c, err := clientv3.New(clientv3.Config{
+			Endpoints:   []string{etcdAddr},
+			DialTimeout: 2 * time.Second,
+		})
+		if !assert.Nil(t, err, "Err etcd NewClient: %v", err) {
+			return
+		}
+		wClnts[i] = c
 	}
 
 	var idx atomic.Int32
 	idx.Add(1)
 	writeLG := loadgen.NewLoadGenerator(dur, writeRPS, func(r *rand.Rand) (time.Duration, bool) {
-		watchers.Add(nWatchers)
 		i := int(idx.Add(1))
+		c := wClnts[i%len(wClnts)]
 		id := "svc-replica-" + strconv.Itoa(i)
 		addr := "127.0.0.1:" + strconv.Itoa(PORT_OFFSET+i)
 		key := filepath.Join(SVC_NAME, id)
+		watchers := wm.Add(key, nWatchers)
 
 		// Note the put timestamp
 		start := time.Now()
