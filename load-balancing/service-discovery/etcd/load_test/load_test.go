@@ -466,6 +466,8 @@ func TestRegisterDeregisterWatchAddWatchers(t *testing.T) {
 		wc := c.Watch(ctx, SVC_NAME, clientv3.WithPrefix())
 		if !calibrating {
 			watcher(t, wc, done, wm, true, false)
+		} else {
+			time.Sleep(10 * time.Millisecond)
 		}
 		return 0.0, false
 	})
