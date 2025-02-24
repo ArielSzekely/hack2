@@ -477,7 +477,7 @@ func TestRegisterDeregisterWatchAddWatchers(t *testing.T) {
 	calibrating = false
 
 	// Start write load-generator
-	wg.Add(2)
+	wg.Add(3)
 	go func() {
 		defer wg.Done()
 		writeLG.Run()
@@ -486,6 +486,16 @@ func TestRegisterDeregisterWatchAddWatchers(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		watchLG.Run()
+	}()
+	go func() {
+		defer wg.Done()
+		start := time.Now()
+		for time.Since(start) < dur*3 {
+			time.Sleep(10 * time.Second)
+			// Put a value, releasing watchers
+			_, err := c.Put(context.TODO(), filepath.Join(SVC_NAME, "xxx"), "yyy")
+			assert.Nil(t, err, "Err Put: %v", err)
+		}
 	}()
 	wg.Wait()
 	db.DPrintf(db.TEST, "Write load-generator stats:")
