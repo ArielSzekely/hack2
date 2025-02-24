@@ -495,6 +495,9 @@ func TestRegisterDeregisterWatchAddWatchers(t *testing.T) {
 			// Put a value, releasing watchers
 			_, err := c.Put(context.TODO(), filepath.Join(SVC_NAME, "xxx"), "yyy")
 			assert.Nil(t, err, "Err Put: %v", err)
+			resp, err := c.Delete(context.TODO(), key)
+			assert.Nil(t, err, "Err Delete: %v", err)
+			assert.Equal(t, int(resp.Deleted), 1, "Err wrong number deleted: %v != 1", resp.Deleted)
 		}
 	}()
 	wg.Wait()
