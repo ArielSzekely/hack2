@@ -148,6 +148,7 @@ func TestRegisterDeregisterOnly(t *testing.T) {
 		}
 		clnts[i] = c
 	}
+	db.DPrintf(db.TEST, "Created %v clnts with which to do write ops", len(clnts))
 
 	var idx atomic.Int32
 	idx.Add(1)
@@ -204,6 +205,7 @@ func TestRegisterDeregisterGet(t *testing.T) {
 		}
 		clnts[i] = c
 	}
+	db.DPrintf(db.TEST, "Created %v clnts with which to do read/write ops", len(clnts))
 
 	var wg sync.WaitGroup
 
@@ -332,6 +334,7 @@ func TestRegisterDeregisterWatchStableSet(t *testing.T) {
 		}
 		wClnts[i] = c
 	}
+	db.DPrintf(db.TEST, "Created %v clnts with which to do write ops", len(wClnts))
 
 	var idx atomic.Int32
 	idx.Add(1)
@@ -432,6 +435,7 @@ func TestRegisterDeregisterWatchAddWatchers(t *testing.T) {
 		}
 		writeClnts[i] = c
 	}
+	db.DPrintf(db.TEST, "Created %v clnts with which to do write ops", len(writeClnts))
 
 	var idx atomic.Int32
 	idx.Add(1)
@@ -476,7 +480,7 @@ func TestRegisterDeregisterWatchAddWatchers(t *testing.T) {
 			return
 		}
 	}
-	db.DPrintf(db.TEST, "Started %v watchers", nWatchers)
+	db.DPrintf(db.TEST, "Created %v clnts with which to do watch ops", len(unstableWatchClnts))
 
 	var calibrating bool = true
 	var idx2 atomic.Int32
