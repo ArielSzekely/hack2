@@ -317,6 +317,7 @@ func TestRegisterDeregisterWatchStableSet(t *testing.T) {
 		wc := c.Watch(context.TODO(), SVC_NAME, clientv3.WithPrefix())
 		go watcher(t, wc, done, wm, false, true)
 	}
+	db.DPrintf(db.TEST, "Started %v watchers", nWatchers)
 
 	// Create writer clients
 	wClnts := make([]*clientv3.Client, nClnt)
@@ -416,6 +417,7 @@ func TestRegisterDeregisterWatchAddWatchers(t *testing.T) {
 		wc := c.Watch(context.TODO(), SVC_NAME, clientv3.WithPrefix())
 		go watcher(t, wc, done, wm, false, true)
 	}
+	db.DPrintf(db.TEST, "Started %v watchers", nWatchers)
 
 	// Create writer clients
 	writeClnts := make([]*clientv3.Client, nClnt)
