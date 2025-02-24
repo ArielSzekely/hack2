@@ -464,12 +464,28 @@ func TestRegisterDeregisterWatchAddWatchers(t *testing.T) {
 	writeLG.Calibrate()
 	db.DPrintf(db.TEST, "Done calibrating write load generator")
 
+	// Create some clnts for watchers which enter & exit the set of watchers.
+	unstableWatchClnts := make([]*clientv3.Client, nClnt)
+	for i := range unstableWatchClnts {
+		c, err := clientv3.New(clientv3.Config{
+			Endpoints:   []string{etcdAddr},
+			DialTimeout: 2 * time.Second,
+		})
+		unstableWatchClnts[i] = c
+		if !assert.Nil(t, err, "Err etcd NewClient: %v", err) {
+			return
+		}
+	}
+	db.DPrintf(db.TEST, "Started %v watchers", nWatchers)
+
 	var calibrating bool = true
 	var idx2 atomic.Int32
 	idx2.Add(1)
 	watchLG := loadgen.NewLoadGenerator(dur, watchRPS, func(r *rand.Rand) (time.Duration, bool) {
 		ctx, cancel := context.WithCancel(context.TODO())
 		defer cancel()
+		i := int(idx2.Add(1))
+		c := unstableWatchClnts[i%len(unstableWatchClnts)]
 		wc := c.Watch(ctx, SVC_NAME, clientv3.WithPrefix())
 		if !calibrating {
 			watcher(t, wc, done, wm, true, false)
