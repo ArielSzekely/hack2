@@ -493,7 +493,8 @@ func TestRegisterDeregisterWatchAddWatchers(t *testing.T) {
 		for time.Since(start) < dur*3 {
 			time.Sleep(10 * time.Second)
 			// Put a value, releasing watchers
-			_, err := c.Put(context.TODO(), filepath.Join(SVC_NAME, "xxx"), "yyy")
+			key := filepath.Join(SVC_NAME, "xxx")
+			_, err := c.Put(context.TODO(), key, "yyy")
 			assert.Nil(t, err, "Err Put: %v", err)
 			resp, err := c.Delete(context.TODO(), key)
 			assert.Nil(t, err, "Err Delete: %v", err)
