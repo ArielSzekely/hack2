@@ -260,14 +260,19 @@ func watch(t *testing.T, wc clientv3.WatchChan, wm *util.WatchMap) {
 }
 
 func watcher(t *testing.T, wc clientv3.WatchChan, done chan bool, wm *util.WatchMap, oneShot bool, ackCreates bool) {
+	dummy := filepath.Join(SVC_NAME, "xxx")
 	// Run indefinitely, unless this is a one-shot watcher
 	for run := true; run; run = !oneShot {
 		select {
 		case resp := <-wc:
 			for _, e := range resp.Events {
 				if e.IsCreate() && ackCreates {
+					key := string(e.Kv.Key)
+					if key == dummy {
+						continue
+					}
 					// Notify the writer that this watcher heard about the create
-					wg := wm.Get(string(e.Kv.Key))
+					wg := wm.Get(key)
 					wg.Done()
 				}
 			}
