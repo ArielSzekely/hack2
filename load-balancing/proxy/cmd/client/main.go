@@ -30,17 +30,17 @@ func main() {
 	var conn net.Conn
 	switch proxytype {
 	case "noproxy":
-		conn, err = net.DialTimeout("tcp", srvAddr, 1000000)
+		conn, err = net.Dial("tcp", srvAddr)
 		if err != nil {
 			log.Fatalf("Dial srv addr %v: err %v", srvAddr, err)
 		}
 	case "netproxy":
-		conn, err = net.DialTimeout("tcp", srvAddr, 1000000)
+		conn, err = net.Dial("tcp", srvAddr)
 		if err != nil {
 			log.Fatalf("Dial proxy addr %v: err %v", srvAddr, err)
 		}
 	case "pipeproxy":
-		conn, err = net.DialTimeout("unix", pipe.PATH, 1000000)
+		conn, err = net.Dial("unix", pipe.PATH)
 		if err != nil {
 			log.Fatalf("Dial pipe %v: err %v", pipe.PATH, err)
 		}
