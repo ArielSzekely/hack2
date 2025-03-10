@@ -218,6 +218,7 @@ func TestRegisterDeregisterGet(t *testing.T) {
 		addr := "127.0.0.1:" + strconv.Itoa(PORT_OFFSET+i)
 		key := filepath.Join(SVC_NAME, id)
 		_, err := c.Put(context.TODO(), key, addr)
+		db.DPrintf(db.ALWAYS, "Bytes: %v", len(key)+len(addr))
 		assert.Nil(t, err, "Err Put: %v", err)
 		resp, err := c.Delete(context.TODO(), key)
 		assert.Nil(t, err, "Err Delete: %v", err)
