@@ -11,6 +11,10 @@ import (
 	"proxy/rpc"
 )
 
+func init() {
+	log.SetFlags(log.Ltime | log.Lmicroseconds)
+}
+
 func main() {
 	if len(os.Args) != 5 {
 		log.Fatalf("Usage: %v <srvaddr> <bufsz> <nrpc> <noproxy|netproxy|pipeproxy>", os.Args[0])

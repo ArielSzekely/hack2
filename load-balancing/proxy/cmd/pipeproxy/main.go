@@ -9,6 +9,10 @@ import (
 	"proxy/rpc"
 )
 
+func init() {
+	log.SetFlags(log.Ltime | log.Lmicroseconds)
+}
+
 func main() {
 	if len(os.Args) != 2 {
 		log.Fatalf("Usage: %v <srv-ip>", os.Args[0])
